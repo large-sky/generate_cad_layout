@@ -1,0 +1,307 @@
+import sqlite3
+import sys
+import os
+from lunar_python import Lunar, Solar
+import wcwidth
+
+# --- 基礎資料定義 ---
+TIAN_GAN = ["甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸"]
+DI_ZHI = ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"]
+PALACES_BASE = ["命宮", "兄弟", "夫妻", "子女", "財帛", "疾厄", "遷移", "交友", "官祿", "田宅", "福德", "父母"]
+
+GRID_LAYOUT = [
+    ["巳", "午", "未", "申"],
+    ["辰", "中", "中", "酉"],
+    ["卯", "中", "中", "戌"],
+    ["寅", "丑", "子", "亥"]
+]
+
+# --- 1. SQLite 資料庫初始化與寫入機制 ---
+def init_ziwei_database():
+    db_name = 'ziwei.db'
+    # 檢查是否已建過，若無則初始化
+    is_new = not os.path.exists(db_name)
+    conn = sqlite3.connect(db_name)
+    cursor = conn.cursor()
+    
+    if is_new:
+        print("首次執行，正在建立本地離線資料庫 (ziwei.db)...")
+        # A. 建立星曜亮度表
+        cursor.execute('CREATE TABLE IF NOT EXISTS brightness (star TEXT, zhi TEXT, level TEXT)')
+        # B. 建立生年四化表
+        cursor.execute('CREATE TABLE IF NOT EXISTS sihua (gan TEXT, lu TEXT, quan TEXT, ke TEXT, ji TEXT)')
+        # C. 建立十二宮解盤分析語庫表
+        cursor.execute('CREATE TABLE IF NOT EXISTS analysis (palace TEXT, star TEXT, text TEXT)')
+        
+        # 內建星曜亮度原始資料
+        brightness_data = {
+            "紫微": {"子": "平", "丑": "廟", "寅": "廟", "卯": "旺", "辰": "得", "巳": "旺", "午": "廟", "未": "廟", "申": "得", "酉": "旺", "戌": "得", "亥": "廟"},
+            "天機": {"子": "廟", "丑": "陷", "寅": "得", "卯": "旺", "辰": "利", "巳": "平", "午": "廟", "未": "陷", "申": "得", "酉": "旺", "戌": "利", "亥": "平"},
+            "太陽": {"子": "陷", "丑": "陷", "寅": "旺", "卯": "廟", "辰": "廟", "巳": "廟", "午": "廟", "未": "得", "申": "得", "酉": "平", "戌": "陷", "亥": "陷"},
+            "武曲": {"子": "旺", "丑": "廟", "寅": "得", "卯": "利", "辰": "廟", "巳": "平", "午": "旺", "未": "廟", "申": "得", "酉": "利", "戌": "廟", "亥": "平"},
+            "天同": {"子": "旺", "丑": "陷", "寅": "利", "卯": "平", "辰": "陷", "巳": "廟", "午": "陷", "未": "陷", "申": "旺", "酉": "平", "戌": "陷", "亥": "廟"},
+            "廉貞": {"子": "平", "丑": "利", "寅": "廟", "卯": "平", "辰": "利", "巳": "廟", "午": "廟", "未": "利", "申": "廟", "酉": "平", "戌": "利", "亥": "陷"},
+            "天府": {"子": "旺", "丑": "廟", "寅": "廟", "卯": "得", "辰": "廟", "巳": "得", "午": "廟", "未": "廟", "申": "得", "酉": "旺", "戌": "廟", "亥": "得"},
+            "太陰": {"子": "廟", "丑": "廟", "寅": "陷", "卯": "陷", "辰": "陷", "巳": "陷", "午": "陷", "未": "得", "申": "得", "酉": "旺", "戌": "廟", "亥": "廟"},
+            "貪狼": {"子": "旺", "丑": "廟", "寅": "平", "卯": "利", "辰": "廟", "巳": "陷", "午": "旺", "未": "廟", "申": "平", "酉": "利", "戌": "廟", "亥": "陷"},
+            "巨門": {"子": "廟", "丑": "陷", "寅": "廟", "卯": "廟", "辰": "陷", "巳": "旺", "午": "廟", "未": "陷", "申": "得", "酉": "旺", "戌": "陷", "亥": "廟"},
+            "天相": {"子": "廟", "丑": "廟", "寅": "得", "卯": "陷", "辰": "得", "巳": "得", "午": "廟", "未": "廟", "申": "得", "酉": "陷", "戌": "得", "亥": "得"},
+            "天梁": {"子": "廟", "丑": "旺", "寅": "廟", "卯": "得", "辰": "廟", "巳": "陷", "午": "廟", "未": "旺", "申": "陷", "酉": "得", "戌": "廟", "亥": "陷"},
+            "七殺": {"子": "旺", "丑": "廟", "寅": "廟", "卯": "陷", "辰": "廟", "巳": "平", "午": "旺", "未": "廟", "申": "廟", "酉": "陷", "戌": "廟", "亥": "平"},
+            "破軍": {"子": "廟", "丑": "旺", "寅": "陷", "卯": "利", "辰": "廟", "巳": "陷", "午": "廟", "未": "旺", "申": "陷", "酉": "利", "戌": "廟", "亥": "陷"}
+        }
+        for star, zhi_dict in brightness_data.items():
+            for zhi, lvl in zhi_dict.items():
+                cursor.execute('INSERT INTO brightness VALUES (?, ?, ?)', (star, zhi, lvl))
+                
+        # 內建十天干四化原始資料
+        sihua_data = [
+            ("甲", "廉貞", "破軍", "武曲", "太陽"), ("乙", "天機", "天梁", "紫微", "太陰"),
+            ("丙", "天同", "天機", "文昌", "廉貞"), ("丁", "太陰", "天同", "天機", "巨門"),
+            ("戊", "貪狼", "太陰", "右弼", "天機"), ("己", "武曲", "貪狼", "天梁", "文曲"),
+            ("庚", "太陽", "武曲", "太陰", "天同"), ("辛", "巨門", "太陽", "文曲", "文昌"),
+            ("壬", "天梁", "紫微", "左輔", "武曲"), ("癸", "破軍", "巨門", "太陰", "貪狼")
+        ]
+        cursor.executemany('INSERT INTO sihua VALUES (?, ?, ?, ?, ?)', sihua_data)
+
+        # 內建精簡版十二宮大數據分析語庫 (供離線輸出)
+        analysis_data = [
+            ("命宮", "紫微", "具備領導氣質，自尊心強，穩重但偶有傲氣，喜聽好話。"),
+            ("命宮", "天機", "思維敏捷，擅長企劃與分析，多愁善變，精神壓力較大。"),
+            ("命宮", "太陽", "光明磊落，熱情積極，樂於助人，男命志向高遠，女命具備男子氣概。"),
+            ("命宮", "武曲", "性格剛毅果決，執行力極強，重實質利益，屬於開創型實幹人才。"),
+            ("財帛宮", "武曲", "正財星入財帛，財源穩定且善於理財，適合技術資產、實體產業或金融操作。"),
+            ("財帛宮", "太陰", "財源涓涓不絕，善於規劃長線投資，如房地產或穩健型基金，主富足。"),
+            ("官祿宮", "紫微", "在事業上有強烈的開創心與領導權慾，適合擔任高階主管、獨立創業或核心工程師。"),
+            ("官祿宮", "天機", "適合從事變動性大、需要高度腦力密集的行業，如軟體開發、工廠自動化設計、架構師。"),
+            ("田宅宮", "天府", "田宅宮見庫星，主能繼承或自購高價值房產，居家環境講究質感與收納，財產能守。"),
+            ("田宅宮", "太陰", "主住宅光線充足、溫馨舒適，具有極佳的置產運，一生不愁無房產。")
+        ]
+        # 為了避免未定義星曜報錯，為十四主星在十二宮自動產生通用預設句
+        all_stars = ["紫微", "天機", "太陽", "武曲", "天同", "廉貞", "天府", "太陰", "貪狼", "巨門", "天相", "天梁", "七殺", "破軍"]
+        for p in PALACES_BASE:
+            for s in all_stars:
+                # 若無專門定義，則塞入基本語句
+                exists = any(d[0]==p and d[1]==s for d in analysis_data)
+                if not exists:
+                    analysis_data.append((p, s, f"此宮位有【{s}】星坐守，對該宮位事務具備深遠影響力，吉凶需視廟旺利陷與四化引動而定。"))
+                    
+        cursor.executemany('INSERT INTO analysis VALUES (?, ?, ?)', analysis_data)
+        conn.commit()
+    return conn
+
+# --- 2. 核心排盤與分析引擎 ---
+class ZiWeiEngine:
+    def __init__(self, db_conn, year, month, day, hour_zhi, gender, sub_type, is_lunar=False):
+        self.db = db_conn
+        self.gender = gender  # "1" 為男, "2" 為女
+        self.hour_zhi = hour_zhi
+        self.is_late_sub = (hour_zhi == "子" and sub_type == "1") # 23:00-24:00 晚子
+        
+        # 日期基準計算
+        if not is_lunar:
+            base_solar = Solar.fromYmdHms(year, month, day, 12, 0, 0)
+            self.solar = base_solar.next(1) if self.is_late_sub else base_solar
+            self.lunar = Lunar.fromSolar(self.solar)
+        else:
+            base_lunar = Lunar.fromYmd(year, month, day)
+            if self.is_late_sub:
+                advanced_solar = base_lunar.getSolar().next(1)
+                self.lunar = Lunar.fromSolar(advanced_solar)
+                self.solar = advanced_solar
+            else:
+                self.lunar = base_lunar
+                self.solar = self.lunar.getSolar()
+                
+        # 獲取生年天干（晚子時不變更生年干支）
+        orig_lunar = Lunar.fromSolar(Solar.fromYmdHms(year, month, day, 12, 0, 0)) if not is_lunar else Lunar.fromYmd(year, month, day)
+        self.year_gan = orig_lunar.getYearGan()
+        self.year_zhi = orig_lunar.getYearZhi()
+
+        self.month_idx = abs(self.lunar.getMonth())
+        self.day_idx = self.lunar.getDay()
+        self.hour_idx = DI_ZHI.index(self.hour_zhi) + 1
+
+        self.gong_位 = {zhi: {"宮干": "", "宮名": "", "原始主星": [], "顯示主星": [], "吉煞": []} for zhi in DI_ZHI}
+        self.ming_gong_zhi = ""
+        self.ju_num = 0
+        self.ju_name = ""
+        self.ziwei_zhi = ""
+
+    def pad_chinese(self, text, width):
+        cur_len = sum(wcwidth.wcwidth(c) for c in text)
+        if cur_len >= width: return text
+        return text + " " * (width - cur_len)
+
+    def build_all(self):
+        self.安十二宮()
+        self.五虎遁與五行局()
+        self.推紫微星位置()
+        self.安十四主星()
+        self.安輔星()
+        self.從資料庫撈取亮度與四化()
+        self.渲染命盤()
+        self.輸出十二宮深度分析()
+
+    def 安十二宮(self):
+        start_pos = DI_ZHI.index("寅")
+        ming_idx = (start_pos + (self.month_idx - 1) - (self.hour_idx - 1)) % 12
+        self.ming_gong_zhi = DI_ZHI[ming_idx]
+        for i, gong_name in enumerate(PALACES_BASE):
+            current_zhi_idx = (ming_idx - i) % 12
+            self.gong_位[DI_ZHI[current_zhi_idx]]["宮名"] = gong_name
+
+    def 五虎遁與五行局(self):
+        gan_idx = TIAN_GAN.index(self.year_gan)
+        start_gan_idx = (gan_idx * 2 + 2) % 10 
+        for i in range(12):
+            zhi_idx = (DI_ZHI.index("寅") + i) % 12
+            g_idx = (start_gan_idx + i) % 10
+            self.gong_位[DI_ZHI[zhi_idx]]["宮干"] = TIAN_GAN[g_idx]
+            
+        ming_gan = self.gong_位[self.ming_gong_zhi]["宮干"]
+        m_gan_val = (TIAN_GAN.index(ming_gan) // 2) + 1
+        m_zhi_val = ((DI_ZHI.index(self.ming_gong_zhi) // 2) % 3) + 1
+        sum_val = m_gan_val + m_zhi_val
+        if sum_val > 5: sum_val -= 5
+        ju_map = {1: ("金四局", 4), 2: ("水二局", 2), 3: ("火六局", 6), 4: ("土五局", 5), 5: ("木三局", 3)}
+        self.ju_name, self.ju_num = ju_map[sum_val]
+
+    def 推紫微星位置(self):
+        X = self.day_idx
+        N = self.ju_num
+        商 = X // N; 餘 = X % N
+        if 餘 == 0:
+            zw_idx = (DI_ZHI.index("寅") + 商 - 1) % 12
+        else:
+            補數 = N - 餘
+            zw_idx = (DI_ZHI.index("寅") + 商 + 1 + (補數 if 補數 % 2 == 0 else -補數)) % 12
+        self.ziwei_zhi = DI_ZHI[zw_idx]
+
+    def 安十四主星(self):
+        zw_idx = DI_ZHI.index(self.ziwei_zhi) 
+        zw_dict = {0: "紫微", -1: "天機", -3: "太陽", -4: "武曲", -5: "天同", -8: "廉貞"}
+        for offset, name in zw_dict.items():
+            self.gong_位[DI_ZHI[(zw_idx + offset) % 12]]["原始主星"].append(name)
+            
+        tf_idx = (4 - zw_idx) % 12 
+        tf_dict = {0: "天府", 1: "太陰", 2: "貪狼", 3: "巨門", 4: "天相", 5: "天梁", 6: "七殺", 10: "破軍"}
+        for offset, name in tf_dict.items():
+            self.gong_位[DI_ZHI[(tf_idx + offset) % 12]]["原始主星"].append(name)
+
+    def 安輔星(self):
+        zuo_fu_idx = (DI_ZHI.index("辰") + self.month_idx - 1) % 12
+        you_bi_idx = (DI_ZHI.index("戌") - (self.month_idx - 1)) % 12
+        san_tai_idx = (zuo_fu_idx + self.day_idx - 1) % 12
+        ba_zuo_idx = (you_bi_idx - (self.day_idx - 1)) % 12
+        self.gong_位[DI_ZHI[san_tai_idx]]["吉煞"].append("三台")
+        self.gong_位[DI_ZHI[ba_zuo_idx]]["吉煞"].append("八座")
+
+    def 從資料庫撈取亮度與四化(self):
+        cursor = self.db.cursor()
+        # 撈取四化
+        cursor.execute("SELECT lu, quan, ke, ji FROM sihua WHERE gan=?", (self.year_gan,))
+        row = cursor.fetchone()
+        hua_dict = {"(祿)": row[0], "(權)": row[1], "(科)": row[2], "(忌)": row[3]} if row else {}
+
+        for zhi, info in self.gong_位.items():
+            formatted = []
+            for star in info["原始主星"]:
+                # 從 DB 查亮度
+                cursor.execute("SELECT level FROM brightness WHERE star=? AND zhi=?", (star, zhi))
+                br_row = cursor.fetchone()
+                b_lbl = f".{br_row[0]}" if br_row and br_row[0] else ""
+                
+                # 查四化
+                h_lbl = ""
+                for h_type, t_star in hua_dict.items():
+                    if star == t_star:
+                        h_lbl = h_type
+                        break
+                formatted.append(f"{star}{b_lbl}{h_lbl}")
+            info["顯示主星"] = formatted
+
+    def 渲染命盤(self):
+        cell_w = 34
+        hr = "+" + ("-" * cell_w + "+") * 4
+        g_name = "乾造 (男命)" if self.gender == "1" else "坤造 (女命)"
+        print("\n" + "="*50 + " 紫微斗數大運命盤 " + "="*50)
+        print(f"【基本基本資料】 性別: {g_name} | 生年干支: {self.year_gan}{self.year_zhi}年")
+        print(f"【時間參數】 陽曆基準: {self.solar.getYear()}-{self.solar.getMonth()}-{self.solar.getDay()} | 農曆: {self.month_idx}月{self.day_idx}日 | 時辰: {self.hour_zhi}時 ({'晚子時換日' if self.is_late_sub else '標準時段'})")
+        print(hr)
+        for row in range(4):
+            for sub in range(4):
+                line = "|"
+                for col in range(4):
+                    z = GRID_LAYOUT[row][col]
+                    if z == "中":
+                        if row == 1 and sub == 1:
+                            line += self.pad_chinese(f"  紫微斗數離線系統 v2.0", cell_w) + "|"
+                        elif row == 1 and sub == 2:
+                            line += self.pad_chinese(f"  命宮所在: {self.ming_gong_zhi}宮", cell_w) + "|"
+                        elif row == 2 and sub == 1:
+                            line += self.pad_chinese(f"  五行局: {self.ju_name}", cell_w) + "|"
+                        elif row == 2 and sub == 2:
+                            line += self.pad_chinese(f"  紫微星落點: {self.ziwei_zhi}宮", cell_w) + "|"
+                        else:
+                            line += " " * cell_w + "|"
+                    else:
+                        g = self.gong_位[z]
+                        if sub == 0:
+                            line += self.pad_chinese(f" {' '.join(g['顯示主星'][:2])}", cell_w) + "|"
+                        elif sub == 1:
+                            line += self.pad_chinese(f" {' '.join(g['顯示主星'][2:])}", cell_w) + "|"
+                        elif sub == 2:
+                            line += self.pad_chinese(f" {' '.join(g['吉煞'])}", cell_w) + "|"
+                        elif sub == 3:
+                            line += self.pad_chinese(f" {g['宮干']}{z} {g['宮名']:>22}", cell_w) + "|"
+                print(line)
+            print(hr)
+
+    def 輸出十二宮深度分析(self):
+        print("\n" + "="*48 + " 十二宮大數據斷語分析 " + "="*48)
+        cursor = self.db.cursor()
+        
+        # 依據標準宮位順序進行解盤輸出
+        for p_name in PALACES_BASE:
+            # 找出屬於該宮位的地支
+            target_zhi = [z for z, info in self.gong_位.items() if info["宮名"] == p_name][0]
+            info = self.gong_位[target_zhi]
+            
+            print(f"\n【{p_name}】 (落於 {info['宮干']}{target_zhi} 宮)")
+            if not info["原始主星"]:
+                print("   ➔ 本宮無主星（借對宮星曜觀看）。主內心較易缺乏安全感，大運流年波動顯著。")
+                continue
+                
+            for star in info["原始主星"]:
+                cursor.execute("SELECT text FROM analysis WHERE palace=? AND star=?", (p_name, star))
+                res = cursor.fetchone()
+                desc = res[0] if res else "暫無對應星曜深度解析，請查閱基本星性。"
+                print(f"   ➔ 星曜【{star}】: {desc}")
+        print("\n" + "="*116)
+
+# --- 3. 互動主程式 ---
+if __name__ == "__main__":
+    db_conn = init_ziwei_database()
+    
+    print("\n====== 紫微斗數離線排盤系統 (整合資料庫版) ======")
+    gender = input("1. 請選擇性別 [1] 男 (乾造)  [2] 女 (坤造): ").strip()
+    cal_type = input("2. 請選擇曆法 [1] 國曆/陽曆         [2] 農曆/陰曆: ").strip()
+    is_lunar = True if cal_type == "2" else False
+    
+    y = int(input("3. 請輸入出生年 (如 1990): ").strip())
+    m = int(input("4. 請輸入出生月 (如 1): ").strip())
+    d = int(input("5. 請輸入出生日 (如 1): ").strip())
+    h_zhi = input("6. 請輸入時辰地支 (如 子, 丑, 寅): ").strip()
+    
+    sub_type = None
+    if h_zhi == "子":
+        print("\n【子時特殊判斷】請依照真實時間線選擇：")
+        print("  [1] 晚子時 (23:00 - 24:00) ➔ 屬於前一日的夜晚，程式將主動換日、推進農曆日期。")
+        print("  [2] 早子時 (00:00 - 01:00) ➔ 屬於新一日的凌晨，保持當天日期計算。")
+        sub_type = input("  請選擇 [1] 或 [2]: ").strip()
+
+    engine = ZiWeiEngine(db_conn, y, m, d, h_zhi, gender, sub_type, is_lunar=is_lunar)
+    engine.build_all()
+    
+    db_conn.close()
