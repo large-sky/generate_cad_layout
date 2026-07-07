@@ -19,7 +19,12 @@ with st.sidebar:
     gender = st.selectbox("性別", ["男命 (乾造)", "女命 (坤造)"])
     gender_code = "1" if "男" in gender else "2"
     
-    birth_date = st.date_input("出生公曆日期", datetime(1994, 1, 1))
+    birth_date = st.date_input(
+    "出生公曆日期", 
+    value=datetime(1994, 1, 1),
+    min_value=datetime(1930, 1, 1),
+    max_value=datetime(2130, 12, 31)
+)
     
     DI_ZHI = ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"]
     hour_choice = st.selectbox("出生時辰", [f"[{i+1}] {zhi}時" for i, zhi in enumerate(DI_ZHI)])
