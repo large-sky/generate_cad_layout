@@ -43,14 +43,15 @@ with st.sidebar:
     btn_calculate = st.button("🚀 開始精準排盤")
 
 # 主畫面邏輯
+# 主畫面邏輯
 if btn_calculate:
-    # 呼叫 V4 核心引擎
+    # 🌟 修正點：確保傳入的全部是前端使用者真正選取的 birth_date 參數
     engine = ZiWeiEngineV4(
         db_path=db_name,
         gender=gender_code,
-        year=birth_date.year,
-        month=birth_date.month,
-        day=birth_date.day,
+        year=birth_date.year,    # 動態抓取網頁選擇的年份
+        month=birth_date.month,  # 動態抓取網頁選擇的月份
+        day=birth_date.day,      # 動態抓取網頁選擇的日期
         hour_zhi=h_zhi,
         sub_type=sub_type,
         longitude=lon,
@@ -65,20 +66,13 @@ if btn_calculate:
     st.subheader("📊 本命十二宮方塊命盤 (疊宮)")
     grid_matrix = engine.generate_palace_matrix()
     
-    # 使用 Streamlit Columns 模擬 4x4 命盤
-    positions = [
-        ("巳", 0, 0), ("午", 0, 1), ("未", 0, 2), ("申", 0, 3),
-        ("辰", 1, 0), ("中宮", 1, 1), ("中宮", 1, 2), ("酉", 1, 3),
-        ("卯", 2, 0), ("中宮", 2, 1), ("中宮", 2, 2), ("戌", 2, 3),
-        ("寅", 3, 0), ("丑", 3, 1), ("子", 3, 2), ("亥", 3, 3)
-    ]
-    
-    # 為了美觀，我們用 Table 顯示
+    # 顯示網頁 Table
     st.table(grid_matrix)
     
-    # PDF 生成與下載
-    pdf_filename = "ziwei_v4_web_report.pdf"
-    info_str = f"{gender} | 新曆: {birth_date} | 經度: {lon}° | 農曆: {engine.lunar.getYear()}年{engine.lunar_month}月{engine.lunar_day}日"
+    # 🌟 修正點：PDF 參數的 info_str 也要同步更新為動態選取的日期，不再寫死
+    pdf_filename = f"ziwei_report_{birth_date.year}_{birth_date.month}_{birth_date.day}.pdf"
+    info_str = f"{gender} | 新曆: {birth_date.strftime('%Y-%m-%d')} | 經度: {lon}° | 農曆: {engine.lunar.getYear()}年{engine.lunar_month}月{engine.lunar_day}日"
+    
     generate_ziwei_pdf_v4(pdf_filename, info_str, grid_matrix, engine.report_logs)
     
     if os.path.exists(pdf_filename):
@@ -86,7 +80,7 @@ if btn_calculate:
             st.download_button(
                 label="📥 下載專業級 PDF 詳批報告",
                 data=pdf_file,
-                file_name=f"紫微斗數_{birth_date}.pdf",
+                file_name=f"紫微斗數_{birth_date.strftime('%Y%m%d')}.pdf",
                 mime="application/pdf"
             )
     engine.close()
