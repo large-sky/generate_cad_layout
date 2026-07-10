@@ -219,7 +219,44 @@ class ZiWeiEngineV4:
                 f"📊 虛歲 {current_start} - {current_end} 歲大限 ➔ 行運進駐【{target_gong_zhi}宮】"
                 f"（借用本命 {gong_info['宮名']} 之能量骨架），大限宮干為：{gong_info['宮干']}。"
             )
-
+    def generate_palace_matrix(self):
+        """ 
+        🌟 斗數 4x4 方塊排盤核心映射矩陣 
+        將 12 地支宮位依照紫微斗數標準順序，填入 4x4 的網格中（中間四格留空或放基本資訊）
+        矩陣佈局順序：
+        [巳, 午, 未, 申]
+        [辰, 空, 空, 酉]
+        [卯, 空, 空, 戌]
+        [寅, 丑, 子, 亥]
+        """
+        # 定義 4x4 矩陣中的地支映射位置（None 代表中間空宮）
+        layout = [
+            ["巳", "午", "未", "申"],
+            ["辰", None, None, "酉"],
+            ["卯", None, None, "戌"],
+            ["寅", "丑", "子", "亥"]
+        ]
+        
+        grid_matrix = []
+        for row in layout:
+            row_data = []
+            for zhi in row:
+                if zhi is None:
+                    # 中間四格填入基本盤勢標籤，供前端渲染
+                    row_data.append({"is_center": True, "gong_name": "紫微斗數V4.0", "content": "真太陽時排盤"})
+                else:
+                    gong_info = self.gong_位.get(zhi, {"宮名": "未知", "宮干": "", "主星": []})
+                    # 組合宮位顯示資訊
+                    row_data.append({
+                        "is_center": False,
+                        "地支": zhi,
+                        "宮名": gong_info["宮名"],
+                        "宮干": gong_info["宮干"],
+                        "主星": gong_info["主星"]
+                    })
+            grid_matrix.append(row_data)
+            
+        return grid_matrix
 def generate_ziwei_pdf_v4(filename, info_str, grid_matrix, logs):
     """ ReportLab PDF 輸出流引擎 """
     doc = SimpleDocTemplate(filename, pagesize=letter)
