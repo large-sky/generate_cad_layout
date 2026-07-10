@@ -140,9 +140,7 @@ class ZiWeiEngineV4:
         self._deploy_all_stars_v4()
         self._calculate_five_elements_局()
         
-        # 在後端也綁定一個標準字串，確保外層 info_str 絕對不會找不到 birth_date
-        self.birth_date_str = f"{self.solar_year:04d}-{self.solar_month:02d}-{self.solar_day:02d}"
-
+      
         # ─── 保持原有的安星排盤流程 ───
         self.year_gan = "己"  
         self.gong_位 = {}
