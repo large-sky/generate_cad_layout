@@ -8,17 +8,24 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.fonts import registerFontDescription
 
 # ─── 基礎常數與地支對應 ───
 DI_ZHI = ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"]
 TIAN_GAN = ["甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸"]
 PALACES_BASE = ["命宮", "兄弟宮", "夫妻宮", "子女宮", "財帛宮", "疾厄宮", "遷移宮", "交友宮", "官祿宮", "田宅宮", "福德宮", "父母宮"]
 
-# 註冊中文字型（確保 Windows 環境下 PDF 不會變亂碼）
-try:
-    pdfmetrics.registerFont(TTFont("msjh", "C:\\Windows\\Fonts\\msjh.ttc")) # 微軟正黑體
-except:
-    pass
+# 取得與目前腳本同目錄下的字型絕對路徑
+FONT_PATH = os.path.join(os.path.dirname(__file__), "msjh.ttc")
+
+# 1. 註冊基礎字型（由外部導入的 TTFont）
+pdfmetrics.registerFont(TTFont("msjh", FONT_PATH))
+
+# 2. 🌟 解決 ValueError 的關鍵：手動綁定字型家族的 4 種狀態
+registerFontDescription("msjh", italic=0, bold=0, name="msjh")
+registerFontDescription("msjh", italic=1, bold=0, name="msjh")
+registerFontDescription("msjh", italic=0, bold=1, name="msjh")
+registerFontDescription("msjh", italic=1, bold=1, name="msjh")
 
 # ─── 168組核心星情斷語與廟旺矩陣資料庫 ───
 BRIGHTNESS_MAP = {
