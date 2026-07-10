@@ -237,3 +237,6 @@ def generate_ziwei_pdf_v4(filename, info_str, grid_matrix, logs):
         story.append(Spacer(1, 4))
         
     doc.build(story)
+def init_database_v4(db_path=None):
+    """ 預留給前端 V4 資料庫初始化的相容性接口 """
+    pass
