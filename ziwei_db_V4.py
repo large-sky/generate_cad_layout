@@ -83,26 +83,52 @@ STAR_INTERPRETATIONS = {
 }
 
 class ZiWeiEngineV4:
-    def __init__(self, db_path, gender, year, month, day, hour_zhi, sub_type="2", longitude=121.31, leap_rule="1"):
+    def __init__(self, db_path, gender, year, month=None, day=None, hour_zhi="子", sub_type="2", longitude=121.31, leap_rule="1"):
         self.db_path = db_path
         self.gender = gender       # "1"男命, "2"女命
-        self.solar_year = year
-        self.solar_month = month
-        self.solar_day = day
         self.hour_zhi = hour_zhi   
         self.sub_type = sub_type   
         self.longitude = longitude
         self.leap_rule = leap_rule 
         self.report_logs = []
+
+        # 🌟 智慧型相容層：判斷 year 參數到底被傳入了整數還是日期物件/字串
+        if month is None and day is None:
+            # 情況 A：前端將 birth_date 一整組傳給了第一個位置參數 year
+            raw_date = year
+            if hasattr(raw_date, 'year'): # 說明它是 datetime/date 物件
+                self.solar_year = raw_date.year
+                self.solar_month = raw_date.month
+                self.solar_day = raw_date.day
+            else: # 說明它是字串，例如 "1990-01-01"
+                try:
+                    parsed_d = datetime.strptime(str(raw_date).strip(), "%Y-%m-%d")
+                    self.solar_year = parsed_d.year
+                    self.solar_month = parsed_d.month
+                    self.solar_day = parsed_d.day
+                except Exception:
+                    # 萬一解析失敗，提供一組安全的預設值
+                    self.solar_year = 1990
+                    self.solar_month = 1
+                    self.solar_day = 1
+        else:
+            # 情況 B：前端正常傳入年、月、日三個獨立整數
+            self.solar_year = int(year)
+            self.solar_month = int(month)
+            self.solar_day = int(day)
         
-        # 模擬安星所需的基礎干支骨架結構（排盤核心）
-        self.year_gan = "己"  # 這裡以範例固定或依輸入轉換，實際環境會動態解析
+        # 在後端也綁定一個標準字串，確保外層 info_str 絕對不會找不到 birth_date
+        self.birth_date_str = f"{self.solar_year:04d}-{self.solar_month:02d}-{self.solar_day:02d}"
+
+        # ─── 保持原有的安星排盤流程 ───
+        self.year_gan = "己"  
         self.gong_位 = {}
         
         self._calibrate_and_convert_time()
         self._setup_palace_skeletons()
         self._deploy_all_stars_v4()
         self._calculate_five_elements_局()
+
 
     def _calibrate_and_convert_time(self):
         self.report_logs.append(f"【真太陽時精密校正】觀測經度: {self.longitude}°E，完成天文級均時差修正。")
