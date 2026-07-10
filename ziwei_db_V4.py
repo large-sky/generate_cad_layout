@@ -8,24 +8,22 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.lib.fonts import registerFontDescription
+
+# ─── ⚖️ 100% 安全字型註冊區塊 (免額外導入，徹底解決 ValueError 與 ImportError) ───
+FONT_PATH = os.path.join(os.path.dirname(__file__), "msjh.ttc")
+
+# 1. 註冊標準體
+pdfmetrics.registerFont(TTFont("msjh", FONT_PATH))
+
+# 2. 手動對應變體名稱到同一個實體檔案，防止 ReportLab 解析 Bold/Italic 時閃退
+pdfmetrics.registerFont(TTFont("msjh-Bold", FONT_PATH))
+pdfmetrics.registerFont(TTFont("msjh-Oblique", FONT_PATH))
+pdfmetrics.registerFont(TTFont("msjh-BoldOblique", FONT_PATH))
 
 # ─── 基礎常數與地支對應 ───
 DI_ZHI = ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"]
 TIAN_GAN = ["甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸"]
 PALACES_BASE = ["命宮", "兄弟宮", "夫妻宮", "子女宮", "財帛宮", "疾厄宮", "遷移宮", "交友宮", "官祿宮", "田宅宮", "福德宮", "父母宮"]
-
-# 取得與目前腳本同目錄下的字型絕對路徑
-FONT_PATH = os.path.join(os.path.dirname(__file__), "msjh.ttc")
-
-# 1. 註冊基礎字型（Regular 標準體）
-pdfmetrics.registerFont(TTFont("msjh", FONT_PATH))
-
-# 2. 🌟 終極防閃退：直接手動將粗體、斜體名稱全部指向同一個註冊好的基礎字型
-# 這樣底層在尋找「msjh-Bold」或「msjh-Oblique」時，會自動 fallback 回 msjh，絕不報錯！
-pdfmetrics.registerFont(TTFont("msjh-Bold", FONT_PATH))
-pdfmetrics.registerFont(TTFont("msjh-Oblique", FONT_PATH))
-pdfmetrics.registerFont(TTFont("msjh-BoldOblique", FONT_PATH))
 # ─── 168組核心星情斷語與廟旺矩陣資料庫 ───
 BRIGHTNESS_MAP = {
     "紫微": {"子":"平", "丑":"旺", "寅":"旺", "卯":"平", "辰":"得", "巳":"廟", "午":"廟", "未":"旺", "申":"得", "酉":"旺", "戌":"得", "亥":"廟"},
