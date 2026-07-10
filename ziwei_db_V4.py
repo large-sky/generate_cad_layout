@@ -92,30 +92,53 @@ class ZiWeiEngineV4:
         self.leap_rule = leap_rule 
         self.report_logs = []
 
-        # 🌟 智慧型相容層：判斷 year 參數到底被傳入了整數還是日期物件/字串
+        # 🌟 智慧型相容層：判斷 year 參數
         if month is None and day is None:
-            # 情況 A：前端將 birth_date 一整組傳給了第一個位置參數 year
             raw_date = year
-            if hasattr(raw_date, 'year'): # 說明它是 datetime/date 物件
+            if hasattr(raw_date, 'year'): 
                 self.solar_year = raw_date.year
                 self.solar_month = raw_date.month
                 self.solar_day = raw_date.day
-            else: # 說明它是字串，例如 "1990-01-01"
+            else: 
                 try:
                     parsed_d = datetime.strptime(str(raw_date).strip(), "%Y-%m-%d")
                     self.solar_year = parsed_d.year
                     self.solar_month = parsed_d.month
                     self.solar_day = parsed_d.day
                 except Exception:
-                    # 萬一解析失敗，提供一組安全的預設值
                     self.solar_year = 1990
                     self.solar_month = 1
                     self.solar_day = 1
         else:
-            # 情況 B：前端正常傳入年、月、日三個獨立整數
             self.solar_year = int(year)
             self.solar_month = int(month)
             self.solar_day = int(day)
+        
+        self.birth_date_str = f"{self.solar_year:04d}-{self.solar_month:02d}-{self.solar_day:02d}"
+
+        # 🌟 關鍵補強：利用傳入的陽曆日期，初始化 lunar_python 的 Lunar 物件並綁定給屬性
+        try:
+            # 建立 lunar_python 的 Solar 陽曆物件，再轉換為農曆 Lunar 物件
+            solar_obj = Solar.fromYmd(self.solar_year, self.solar_month, self.solar_day)
+            self.lunar = Lunar.fromSolar(solar_obj)
+            
+            # 同步前端需要的 engine.lunar_month 與 engine.lunar_day 屬性
+            self.lunar_month = self.lunar.getMonth()
+            self.lunar_day = self.lunar.getDay()
+        except Exception as e:
+            # 防呆後備機制（萬一轉換異常時）
+            self.lunar = None
+            self.lunar_month = 1
+            self.lunar_day = 1
+
+        # ─── 保持原有的安星排盤流程 ───
+        self.year_gan = "己"  
+        self.gong_位 = {}
+        
+        self._calibrate_and_convert_time()
+        self._setup_palace_skeletons()
+        self._deploy_all_stars_v4()
+        self._calculate_five_elements_局()
         
         # 在後端也綁定一個標準字串，確保外層 info_str 絕對不會找不到 birth_date
         self.birth_date_str = f"{self.solar_year:04d}-{self.solar_month:02d}-{self.solar_day:02d}"
