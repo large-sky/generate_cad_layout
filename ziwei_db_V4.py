@@ -1,7 +1,7 @@
 import os
 import math
 from datetime import datetime
-from lunar_python import Lunar, Solar, TimeUtil
+from lunar_python import Lunar, Solar
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
